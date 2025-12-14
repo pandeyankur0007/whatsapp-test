@@ -6,6 +6,8 @@
   import { onMount, onDestroy } from "svelte";
   import { callStore } from "./lib/stores/call-store.svelte";
   import { fcmService } from "./lib/services/fcm-service";
+  import { liveKitService } from "./lib/services/livekit-service";
+  import { App } from "@capacitor/app";
   import { initializeDemoData } from "./lib/services/storage-service";
   import { FrameRateMonitor } from "./lib/utils/performance";
 
@@ -33,6 +35,16 @@
 
     // Mark as initialized
     isInitialized = true;
+
+    // Handle App Lifecycle for Video Calls
+    App.addListener("appStateChange", ({ isActive }) => {
+      console.log("App state changed. Is active?", isActive);
+      if (isActive) {
+        liveKitService.handleAppResume();
+      } else {
+        liveKitService.handleAppPause();
+      }
+    });
   });
 
   onDestroy(() => {
@@ -220,39 +232,6 @@
     font-family: monospace;
     z-index: 9999;
     pointer-events: none;
-  }
-
-  .dev-tools {
-    position: fixed;
-    top: 10px;
-    left: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 9999;
-    pointer-events: none;
-  }
-
-  .metrics {
-    background: rgba(0, 0, 0, 0.8);
-    color: var(--primary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: monospace;
-  }
-
-  .simulate-btn {
-    pointer-events: auto;
-    background: rgba(255, 69, 0, 0.9);
-    color: white;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: bold;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
   .loading-container {

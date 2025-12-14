@@ -39,7 +39,13 @@
     });
 </script>
 
-<div class="call-screen" onclick={handleScreenTap}>
+<div
+    class="call-screen"
+    onclick={handleScreenTap}
+    onkeydown={(e) => e.key === "Enter" && handleScreenTap()}
+    role="button"
+    tabindex="0"
+>
     <!-- Remote video (full screen) -->
     <div class="remote-video">
         <VideoRenderer isLocal={false} />

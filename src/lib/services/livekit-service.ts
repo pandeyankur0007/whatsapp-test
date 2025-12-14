@@ -8,7 +8,8 @@ import {
     ConnectionQuality,
     type LocalTrack,
     type RemoteTrackPublication,
-    type RemoteTrack
+    type RemoteTrack,
+    LocalVideoTrack
 } from 'livekit-client';
 
 import { callStore } from '../stores/call-store.svelte';
@@ -26,7 +27,13 @@ class LiveKitService {
     private participantName = 'me';
 
     constructor() {
-        this.room = new Room();
+        this.room = new Room({
+            adaptiveStream: true,
+            dynacast: true,
+            videoCaptureDefaults: {
+                resolution: VideoPresets.h540.resolution,
+            }
+        });
         this.setupEventListeners();
     }
 
@@ -110,6 +117,8 @@ class LiveKitService {
                 [ConnectionQuality.Excellent]: 'excellent',
                 [ConnectionQuality.Good]: 'good',
                 [ConnectionQuality.Poor]: 'poor',
+                [ConnectionQuality.Lost]: 'poor',
+                [ConnectionQuality.Unknown]: 'poor',
             };
             callStore.connectionQuality = qualityMap[quality] as 'excellent' | 'good' | 'poor';
 
@@ -153,17 +162,20 @@ class LiveKitService {
                 console.warn('Closing existing connection before new one...');
                 await this.disconnect();
                 // Re-initialize room to be safe
-                this.room = new Room();
+                this.room = new Room({
+                    adaptiveStream: true,
+                    dynacast: true,
+                    videoCaptureDefaults: {
+                        resolution: VideoPresets.h540.resolution,
+                    }
+                });
                 this.setupEventListeners();
             }
 
             callStore.setCallState('connecting');
             console.log('Connecting to LiveKit URL:', url);
 
-            await this.room.connect(url, token, {
-                adaptiveStream: true,
-                dynacast: true,
-            });
+            await this.room.connect(url, token);
 
             console.log('Room connected successfully. State:', this.room.state);
 
@@ -193,17 +205,20 @@ class LiveKitService {
                 autoGainControl: audioSettings?.autoGainControl ?? true,
             },
             video: {
-                resolution: {
-                    width: videoSettings?.width ?? 1280,
-                    height: videoSettings?.height ?? 720,
-                    frameRate: videoSettings?.frameRate ?? 30,
-                },
+                // Use qHD (540p) which is a good balance for mobile performance
+                resolution: VideoPresets.h540.resolution,
+                // Limit frame rate to 24fps for better bandwidth usage
+                frameRate: 24,
                 facingMode: videoSettings?.facingMode ?? 'user',
             },
         });
 
         for (const track of this.localTracks) {
-            await this.room?.localParticipant.publishTrack(track);
+            // Enable simulcast for video tracks to allow adaptive stream switching
+            const isVideo = track.kind === Track.Kind.Video;
+            await this.room?.localParticipant.publishTrack(track, {
+                simulcast: isVideo,
+            });
         }
 
         const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
@@ -233,6 +248,43 @@ class LiveKitService {
     }
 
     async switchCamera() {
+        const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
+        if (!videoTrack) return;
+
+        try {
+            // Get list of video devices
+            const devices = await Room.getLocalDevices('videoinput');
+            const validDevices = devices.filter(d => d.deviceId !== 'default' && d.deviceId !== 'communications');
+
+            if (validDevices.length < 2) {
+                console.warn('No potential alternate camera found');
+                return;
+            }
+
+            // Find current device index
+            const currentDeviceId = videoTrack.mediaStreamTrack.getSettings().deviceId;
+            const currentIndex = validDevices.findIndex(d => d.deviceId === currentDeviceId);
+
+            // Pick next device (cycle)
+            const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % validDevices.length;
+            const nextDevice = validDevices[nextIndex];
+
+            console.log('Switching camera to device:', nextDevice.label);
+
+            await videoTrack.setDeviceId(nextDevice.deviceId);
+
+            // Update store state (toggle)
+            callStore.switchCamera();
+
+        } catch (error) {
+            console.error('Failed to switch camera device:', error);
+            // Fallback: Brute force with delay to avoid Code 3
+            await this.handleCameraSwitchFallback();
+        }
+    }
+
+    private async handleCameraSwitchFallback() {
+        console.log('Using fallback camera switch...');
         const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
         if (!videoTrack || !this.room) return;
 
@@ -240,12 +292,15 @@ class LiveKitService {
         videoTrack.stop();
         this.localTracks = this.localTracks.filter(t => t !== videoTrack);
 
+        // DELAY is critical for Android "Device error code 3"
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         callStore.switchCamera();
 
         const [newTrack] = await createLocalTracks({
             video: {
                 facingMode: callStore.facingMode,
-                resolution: VideoPresets.h720.resolution,
+                resolution: VideoPresets.h540.resolution,
             },
         });
 
@@ -277,6 +332,32 @@ class LiveKitService {
 
     getRoom(): Room | null {
         return this.room;
+    }
+
+    private wasVideoEnabledBeforeBackground = false;
+
+    async handleAppPause() {
+        console.log('App paused: managing tracks...');
+        const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
+        if (videoTrack && !videoTrack.isMuted) {
+            console.log('Pausing video track for background mode');
+            this.wasVideoEnabledBeforeBackground = true;
+            await videoTrack.mute();
+            // We do NOT update callStore state here so the UI remains "Video On" 
+            // but the track is technically muted to save resources/comply with OS.
+        }
+    }
+
+    async handleAppResume() {
+        console.log('App resumed: restoring tracks...');
+        if (this.wasVideoEnabledBeforeBackground) {
+            const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
+            if (videoTrack) {
+                console.log('Resuming video track from background mode');
+                await videoTrack.unmute();
+            }
+            this.wasVideoEnabledBeforeBackground = false;
+        }
     }
 }
 

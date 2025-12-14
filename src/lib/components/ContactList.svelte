@@ -122,7 +122,13 @@
         {#if showToken}
             <div class="my-token-box">
                 <p>Share this token with the caller:</p>
-                <div class="token-value" onclick={handleCopyToken}>
+                <div
+                    class="token-value"
+                    onclick={handleCopyToken}
+                    onkeydown={(e) => e.key === "Enter" && handleCopyToken()}
+                    role="button"
+                    tabindex="0"
+                >
                     {myToken ? myToken.slice(0, 20) + "..." : "Loading..."}
                     <span class="copy-icon">📋</span>
                 </div>
@@ -170,6 +176,10 @@
                         class="contact-item button-press"
                         style="position: absolute; top: 0; left: 0; width: 100%; height: 72px; transform: translateY({item.start}px);"
                         onclick={() => handleCallContact(contact)}
+                        onkeydown={(e) =>
+                            e.key === "Enter" && handleCallContact(contact)}
+                        role="button"
+                        tabindex="0"
                     >
                         <div class="contact-avatar">
                             {#if contact.avatar}

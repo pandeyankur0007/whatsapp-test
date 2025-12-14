@@ -91,6 +91,10 @@
                         class="history-item button-press"
                         style="position: absolute; transform: translateY({item.start}px) translateZ(0);"
                         onclick={() => handleCallBack(entry)}
+                        onkeydown={(e) =>
+                            e.key === "Enter" && handleCallBack(entry)}
+                        role="button"
+                        tabindex="0"
                     >
                         <div class="history-avatar">
                             {#if entry.contactAvatar}
