@@ -49,7 +49,7 @@
     {/if}
 
     <!-- Control buttons -->
-    <div class="controls-grid">
+    <div class="controls-row">
         <!-- Microphone toggle -->
         <button
             class="control-btn"
@@ -117,6 +117,19 @@
             </svg>
         </button>
 
+        <!-- End call (Center) -->
+        <button
+            class="control-btn end-call"
+            onclick={handleEndCall}
+            aria-label="End call"
+        >
+            <svg class="icon icon-lg" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                    d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"
+                />
+            </svg>
+        </button>
+
         <!-- Speaker toggle -->
         <button
             class="control-btn"
@@ -163,19 +176,6 @@
                 <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
             </svg>
         </button>
-
-        <!-- End call -->
-        <button
-            class="control-btn end-call"
-            onclick={handleEndCall}
-            aria-label="End call"
-        >
-            <svg class="icon" viewBox="0 0 24 24" fill="currentColor">
-                <path
-                    d="M23,11.74c-0.64-0.43-1.33-0.76-2-1.08l-1.48,1.48c0.22,0.09,0.44,0.19,0.66,0.3 c0.37,0.19,0.66,0.49,0.84,0.85c0.18,0.36,0.27,0.77,0.27,1.19c0,0.42-0.09,0.83-0.27,1.19c-0.18,0.36-0.47,0.66-0.84,0.85 c-3.73,1.91-8.16,1.91-11.89,0c-0.37-0.19-0.66-0.49-0.84-0.85C7.27,15.31,7.18,14.9,7.18,14.48c0-0.42,0.09-0.83,0.27-1.19 c0.18-0.36,0.47-0.66,0.84-0.85c0.22-0.11,0.44-0.21,0.66-0.3L7.47,10.66c-0.67,0.32-1.36,0.65-2,1.08 C4.27,12.47,3.5,13.42,3.5,14.48c0,1.06,0.77,2.01,1.97,2.74c4.19,2.15,9.17,2.15,13.36,0c1.2-0.73,1.97-1.68,1.97-2.74 C20.8,13.42,20.03,12.47,23,11.74z M13.5,2v8.5c0,0.83-0.67,1.5-1.5,1.5s-1.5-0.67-1.5-1.5V2c0-0.83,0.67-1.5,1.5-1.5 S13.5,1.17,13.5,2z"
-                />
-            </svg>
-        </button>
     </div>
 </div>
 
@@ -185,7 +185,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        padding: var(--spacing-xl) var(--spacing-lg);
+        padding: var(--spacing-xl) var(--spacing-sm);
         padding-bottom: calc(var(--spacing-xl) + env(safe-area-inset-bottom));
         background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
         display: flex;
@@ -194,6 +194,7 @@
         gap: var(--spacing-md);
         pointer-events: none;
         transform: translateZ(0);
+        width: 100%;
     }
 
     .duration {
@@ -202,20 +203,24 @@
         font-weight: 500;
         text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         pointer-events: none;
+        margin-bottom: var(--spacing-sm);
     }
 
-    .controls-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: var(--spacing-md);
+    .controls-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-md); /* Default gap */
         width: 100%;
-        max-width: 400px;
+        max-width: 100%;
         pointer-events: auto;
+        overflow-x: auto; /* Safety for very small screens */
+        padding: 0 var(--spacing-xs);
     }
 
     .control-btn {
-        width: 56px;
-        height: 56px;
+        width: 50px;
+        height: 50px;
         border-radius: var(--radius-full);
         background: rgba(255, 255, 255, 0.2);
         backdrop-filter: blur(10px);
@@ -226,6 +231,7 @@
         border: 2px solid transparent;
         transform: translateZ(0);
         will-change: transform;
+        flex-shrink: 0;
     }
 
     .control-btn:active {
@@ -233,34 +239,58 @@
     }
 
     .control-btn.active {
-        background: var(--error);
-        border-color: var(--error);
+        background: var(
+            --text-primary
+        ); /* White when active (optional style choice, logic was error red before) */
+        background: rgba(255, 255, 255, 0.9);
+        color: var(--background);
+        border-color: transparent;
     }
 
+    /* Restore error color for End Call specifically */
     .control-btn.end-call {
         background: var(--error);
-        grid-column: 3;
+        width: 64px; /* Slightly larger */
+        height: 64px;
+        box-shadow: 0 4px 12px rgba(255, 0, 0, 0.4);
     }
 
     .icon {
         width: 24px;
         height: 24px;
+        color: inherit;
+    }
+
+    .control-btn.end-call .icon {
         color: white;
     }
 
-    @media (max-width: 480px) {
-        .controls-grid {
-            max-width: 100%;
-        }
+    /* Mute/Video Off styles */
+    .control-btn[aria-label="Unmute microphone"].active,
+    .control-btn[aria-label="Turn on camera"].active {
+        background: rgba(255, 255, 255, 0.9);
+        color: black;
+    }
 
+    /* Revert to original active style logic if needed, but white Background for "Muted" is standard */
+    /* Let's keep specific active class logic from previous: */
+
+    .control-btn.active {
+        background: white;
+        color: black;
+    }
+
+    @media (max-width: 380px) {
+        .controls-row {
+            gap: var(--spacing-sm);
+        }
         .control-btn {
-            width: 48px;
-            height: 48px;
+            width: 44px;
+            height: 44px;
         }
-
-        .icon {
-            width: 20px;
-            height: 20px;
+        .control-btn.end-call {
+            width: 56px;
+            height: 56px;
         }
     }
 </style>

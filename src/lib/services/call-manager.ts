@@ -122,6 +122,11 @@ class CallManager {
 
         const incomingCall = callStore.incomingCall;
 
+        // Send rejection signal to caller
+        if (incomingCall?.callerFcmToken) {
+            await fcmService.sendCallSignal(incomingCall.callerFcmToken, 'call_rejected');
+        }
+
         // Save to call history as missed
         if (incomingCall) {
             await this.saveCallHistory({
@@ -204,14 +209,28 @@ class CallManager {
     }
 
     /**
+     * Get or create a unique identity for this client
+     */
+    private getClientIdentity(): string {
+        const STORAGE_KEY = 'whatsapp_client_id';
+        let id = localStorage.getItem(STORAGE_KEY);
+        if (!id) {
+            id = `user_${nanoid(8)}`;
+            localStorage.setItem(STORAGE_KEY, id);
+        }
+        return id;
+    }
+
+    /**
      * Get LiveKit access token from server
      */
     private async getCallToken(roomName: string, participantName: string): Promise<string> {
         try {
             const apiUrl = import.meta.env.VITE_API_URL;
+            const identity = this.getClientIdentity();
 
             const response = await fetch(
-                `${apiUrl}/token?roomName=${encodeURIComponent(roomName)}&participantName=${encodeURIComponent(participantName)}`
+                `${apiUrl}/token?roomName=${encodeURIComponent(roomName)}&participantName=${encodeURIComponent(identity)}`
             );
 
             if (!response.ok) {

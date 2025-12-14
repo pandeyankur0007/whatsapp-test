@@ -14,34 +14,48 @@
     let startX = 0;
     const threshold = 100; // pixels to slide before accepting
 
-    function handleTouchStart(e: TouchEvent) {
+    function handlePointerDown(e: PointerEvent) {
         isDragging = true;
-        startX = e.touches[0].clientX - slidePosition;
+        startX = e.clientX;
+        (e.target as Element).setPointerCapture(e.pointerId);
     }
 
-    function handleTouchMove(e: TouchEvent) {
+    function handlePointerMove(e: PointerEvent) {
         if (!isDragging) return;
 
-        const currentX = e.touches[0].clientX - startX;
+        const currentX = e.clientX - startX;
         slidePosition = Math.max(0, Math.min(currentX, threshold));
 
         // Haptic feedback at halfway point
         if (
             slidePosition > threshold / 2 &&
-            slidePosition < threshold / 2 + 2
+            slidePosition < threshold / 2 + 5
         ) {
-            Haptics.impact({ style: ImpactStyle.Light });
+            // Debounce haptics here or just fire once
+            Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
         }
     }
 
-    async function handleTouchEnd() {
-        if (slidePosition >= threshold) {
-            await Haptics.impact({ style: "medium" });
+    async function handlePointerUp(e: PointerEvent) {
+        if (!isDragging) return;
+
+        isDragging = false;
+        (e.target as Element).releasePointerCapture(e.pointerId);
+
+        if (slidePosition >= threshold - 10) {
+            // Tolerate small gap
+            await Haptics.impact({ style: ImpactStyle.Medium });
             await callManager.acceptCall();
         } else {
-            slidePosition = 0;
+            // Animate back
+            const animateBack = () => {
+                if (slidePosition > 0) {
+                    slidePosition = Math.max(0, slidePosition - 10);
+                    requestAnimationFrame(animateBack);
+                }
+            };
+            animateBack();
         }
-        isDragging = false;
     }
 
     async function handleReject() {
@@ -81,12 +95,7 @@
 
             <!-- Slide to answer -->
             <div class="answer-container">
-                <div
-                    class="answer-slider"
-                    ontouchstart={handleTouchStart}
-                    ontouchmove={handleTouchMove}
-                    ontouchend={handleTouchEnd}
-                >
+                <div class="answer-slider">
                     <div class="slider-track">
                         <div
                             class="slider-progress"
@@ -96,7 +105,12 @@
                     </div>
                     <div
                         class="slider-thumb"
-                        style="transform: translateX({slidePosition}px) translateZ(0)"
+                        class:dragging={isDragging}
+                        style="transform: translateX({slidePosition}px) translateZ(0); touch-action: none;"
+                        onpointerdown={handlePointerDown}
+                        onpointermove={handlePointerMove}
+                        onpointerup={handlePointerUp}
+                        onpointercancel={handlePointerUp}
                     >
                         <svg viewBox="0 0 24 24" fill="white">
                             <path

@@ -66,6 +66,15 @@ class LiveKitService {
         this.room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
             console.log('Participant disconnected:', participant.identity);
             callStore.setRemoteParticipant(null);
+
+            // For 1-to-1 calls, end call immediately when the other party leaves
+            console.log('Remote participant left, ending call sequence...');
+
+            // Set ended processing state
+            callStore.setCallState('ended');
+
+            // Disconnect immediately to clear connection
+            this.disconnect();
         });
 
         this.room.on(

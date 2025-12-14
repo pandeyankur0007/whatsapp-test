@@ -126,7 +126,8 @@ class FCMService {
                 callerName: data.callerName,
                 callerAvatar: data.callerAvatar,
                 roomName: data.roomName,
-                timestamp: new Date()
+                timestamp: new Date(),
+                callerFcmToken: data.callerFcmToken
             };
 
             callStore.setIncomingCall(notification);
@@ -134,6 +135,33 @@ class FCMService {
 
             // Play ringtone
             this.playRingtone();
+        } else if (data.type === 'call_rejected') {
+            // Caller side: Recipient rejected
+            if (callStore.callState === 'ringing' || callStore.callState === 'initiating') {
+                callStore.setCallState('ended');
+                setTimeout(() => callStore.reset(), 2000); // Show ended for a bit
+            }
+        } else if (data.type === 'call_cancelled') {
+            // Callee side: Caller cancelled
+            if (callStore.callState === 'ringing') {
+                this.stopRingtone();
+                callStore.setIncomingCall(null);
+                callStore.setCallState('idle');
+            }
+        } else if (data.type === 'call_ended') {
+            // Any side: Peer ended call
+            if (callStore.callState === 'connected' || callStore.callState === 'connecting') {
+                callStore.setCallState('ended');
+                // Allow CallManager to cleanup via state subscription or manual disconnect?
+                // Better to let CallManager handle the disconnect if observing state, 
+                // but CallManager logic handles cleanup on 'endCall()'.
+                // Ideally we should trigger CallManager.endCall() but circular ref is tricky.
+                // We'll trust App.svelte or similar to react, OR we simply reset.
+                // Actually, LiveKit should handle 'connected' termination via 'ParticipantDisconnected'.
+                // But for explicit 'End Call' button, this is a fallback.
+                // Let's reload to be safe or just show ended.
+                setTimeout(() => window.location.reload(), 1000); // Brute force safety for now
+            }
         }
     }
 
@@ -238,6 +266,7 @@ class FCMService {
     ): Promise<void> {
         try {
             const apiUrl = import.meta.env.VITE_API_URL;
+            const callerFcmToken = this.getToken() || "";
 
             const response = await fetch(`${apiUrl}/call/notify`, {
                 method: 'POST',
@@ -249,6 +278,7 @@ class FCMService {
                     callerName,
                     roomName,
                     callerAvatar,
+                    callerFcmToken,
                     type: 'incoming_call'
                 })
             });
@@ -259,6 +289,35 @@ class FCMService {
         } catch (error) {
             console.error('Error sending call notification:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Send a signaling message (reject, end, etc.) to a specific token
+     */
+    async sendCallSignal(
+        recipientToken: string,
+        type: 'call_rejected' | 'call_ended' | 'call_cancelled'
+    ): Promise<void> {
+        try {
+            const apiUrl = import.meta.env.VITE_API_URL;
+
+            // Reuse the notify endpoint to forward the signal
+            await fetch(`${apiUrl}/call/notify`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    recipientToken,
+                    type,
+                    // Minimal payload needed for logic, we don't display these notifications usually
+                    // But we might want some debug info
+                })
+            });
+        } catch (error) {
+            console.error(`Error sending ${type} signal:`, error);
+            // Don't throw, just log. Signaling is best-effort.
         }
     }
 }

@@ -51,6 +51,7 @@ export interface CallNotification {
     callerAvatar?: string;
     roomName: string;
     timestamp: Date;
+    callerFcmToken?: string;
 }
 
 export interface PerformanceMetrics {
