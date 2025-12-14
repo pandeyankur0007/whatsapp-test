@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "67166229406",
+    "project_id": "whatsapp-test-99f25",
+    "storage_bucket": "whatsapp-test-99f25.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:67166229406:android:7fd505bc7df4fb84493c8f",
+        "android_client_info": {
+          "package_name": "com.whatsapp.videocall"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyABQz9ozKmR9lkR-n2wTiEPDa5NpQhjd7g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
