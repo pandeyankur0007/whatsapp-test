@@ -61,7 +61,11 @@ class CallManager {
             callStore.setCallState('ringing');
 
             // Connect to LiveKit room
-            const livekitUrl = import.meta.env.VITE_LIVEKIT_URL;
+            const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'https://ultra-poject-ebwwosad.livekit.cloud';
+            if (!livekitUrl) {
+                console.error('Missing VITE_LIVEKIT_URL');
+                throw new Error('Missing LiveKit URL');
+            }
             await liveKitService.connect(token, livekitUrl);
 
             // Start call duration timer
@@ -93,7 +97,7 @@ class CallManager {
             const token = await this.getCallToken(incomingCall.roomName, 'me');
 
             // Connect to LiveKit room
-            const livekitUrl = import.meta.env.VITE_LIVEKIT_URL;
+            const livekitUrl = import.meta.env.VITE_LIVEKIT_URL || 'https://ultra-poject-ebwwosad.livekit.cloud';
             await liveKitService.connect(token, livekitUrl);
 
             // Clear incoming call notification

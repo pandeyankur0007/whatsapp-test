@@ -12,10 +12,14 @@
     import type { Contact } from "../types";
     import { debounce } from "../utils/performance";
 
+    import { fcmService } from "../services/fcm-service";
+
     let contacts = $state<Contact[]>([]);
     let filteredContacts = $state<Contact[]>([]);
     let searchQuery = $state("");
     let scrollContainer: HTMLDivElement;
+    let myToken = $state<string>("");
+    let showToken = $state(false);
 
     onMount(async () => {
         try {
@@ -24,6 +28,10 @@
             contacts = await storageService.getAllContacts();
             console.log("Contacts loaded:", $state.snapshot(contacts));
             filteredContacts = contacts;
+
+            // Get my token
+            const token = fcmService.getToken();
+            if (token) myToken = token;
         } catch (error) {
             console.error("Error loading contacts:", error);
         }
@@ -54,6 +62,35 @@
         await callManager.initiateCall(contact);
     }
 
+    async function handleCopyToken() {
+        if (myToken) {
+            await navigator.clipboard.writeText(myToken);
+            alert("Token copied! Send this to the other device.");
+        } else {
+            alert("No token generated yet. Check permissions.");
+        }
+    }
+
+    async function handleEditContact(contact: Contact, e: Event) {
+        e.stopPropagation(); // Prevent calling
+        const newToken = prompt(
+            `Enter FCM Token for ${contact.name}:`,
+            contact.fcmToken || "",
+        );
+        if (newToken !== null) {
+            const updatedContact = { ...contact, fcmToken: newToken };
+            await storageService.saveContact(updatedContact);
+
+            // Update local state
+            const index = contacts.findIndex((c) => c.id === contact.id);
+            if (index !== -1) {
+                contacts[index] = updatedContact;
+                // Re-filter to update view
+                handleSearchDebounced(searchQuery);
+            }
+        }
+    }
+
     // Virtual scroller - using $derived for Svelte 5
     let virtualizer = $derived(
         scrollContainer
@@ -75,7 +112,23 @@
 <div class="contact-list">
     <!-- Header -->
     <div class="header safe-area-top">
-        <h1>Contacts</h1>
+        <div class="header-top">
+            <h1>Contacts</h1>
+            <button class="token-btn" onclick={() => (showToken = !showToken)}>
+                {showToken ? "Hide ID" : "My ID"}
+            </button>
+        </div>
+
+        {#if showToken}
+            <div class="my-token-box">
+                <p>Share this token with the caller:</p>
+                <div class="token-value" onclick={handleCopyToken}>
+                    {myToken ? myToken.slice(0, 20) + "..." : "Loading..."}
+                    <span class="copy-icon">📋</span>
+                </div>
+            </div>
+        {/if}
+
         <div class="search-box">
             <svg
                 class="search-icon"
@@ -142,16 +195,25 @@
                             </div>
                         </div>
 
-                        <button
-                            class="call-btn"
-                            aria-label="Call {contact.name}"
-                        >
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path
-                                    d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
-                                />
-                            </svg>
-                        </button>
+                        <div class="actions">
+                            <button
+                                class="action-btn edit-btn"
+                                aria-label="Edit {contact.name}"
+                                onclick={(e) => handleEditContact(contact, e)}
+                            >
+                                ✏️
+                            </button>
+                            <button
+                                class="action-btn call-btn"
+                                aria-label="Call {contact.name}"
+                            >
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+                                    />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 {/each}
             </div>
@@ -291,16 +353,78 @@
         color: var(--text-secondary);
     }
 
-    .call-btn {
+    .header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .token-btn {
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        color: var(--text-secondary);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+
+    .my-token-box {
+        background: var(--surface-secondary);
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-md);
+        font-size: 12px;
+    }
+
+    .my-token-box p {
+        margin-bottom: 4px;
+        color: var(--text-secondary);
+    }
+
+    .token-value {
+        font-family: monospace;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 8px;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .actions {
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+
+    .action-btn {
         width: 40px;
         height: 40px;
-        border-radius: var(--radius-full);
-        background: var(--primary);
-        color: white;
+        border-radius: 50%;
+        border: none;
         display: flex;
         align-items: center;
         justify-content: center;
-        flex-shrink: 0;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .call-btn {
+        background: var(--primary);
+        color: white;
+    }
+
+    .edit-btn {
+        background: var(--surface-secondary);
+        color: var(--text-secondary);
+        font-size: 14px;
+    }
+
+    .call-btn:active,
+    .edit-btn:active {
+        transform: scale(0.95);
     }
 
     .call-btn svg {

@@ -120,14 +120,17 @@ class LiveKitService {
     }
 
     // Connect using a token fetched from backend
-    async connectWithTokenFromServer(): Promise<void> {
+    async connectWithTokenFromServer(roomName: string, participantName: string): Promise<void> {
         try {
+            this.roomName = roomName;
+            this.participantName = participantName;
+
             const token = await this.fetchToken();
             const url = 'https://ultra-poject-ebwwosad.livekit.cloud';
             await this.connect(token, url);
         } catch (error) {
             console.error('Failed to connect with server token:', error);
-            callStore.setCallState('ended');
+            await this.disconnect(); // Ensure cleanup
             throw error;
         }
     }
@@ -136,16 +139,35 @@ class LiveKitService {
         if (!this.room) throw new Error('Room not initialized');
 
         try {
+            // Ensure we are disconnected from any previous session
+            if (this.room.state !== 'disconnected') {
+                console.warn('Closing existing connection before new one...');
+                await this.disconnect();
+                // Re-initialize room to be safe
+                this.room = new Room();
+                this.setupEventListeners();
+            }
+
             callStore.setCallState('connecting');
+            console.log('Connecting to LiveKit URL:', url);
 
             await this.room.connect(url, token, {
                 adaptiveStream: true,
                 dynacast: true,
             });
 
-            await this.publishLocalTracks();
+            console.log('Room connected successfully. State:', this.room.state);
+
+            // Double check state before publishing
+            if (this.room.state === 'connected') {
+                console.log('Publishing local tracks...');
+                await this.publishLocalTracks();
+            } else {
+                console.error('Room not connected after connect() call. Current state:', this.room.state);
+            }
         } catch (error) {
             console.error('Failed to connect:', error);
+            await this.disconnect();
             callStore.setCallState('ended');
             throw error;
         }

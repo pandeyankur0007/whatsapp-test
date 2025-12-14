@@ -9,6 +9,7 @@ import { AccessToken } from 'livekit-server-sdk';
 import admin from 'firebase-admin';
 import dotenv from 'dotenv';
 import { readFile } from 'fs/promises';
+import { networkInterfaces } from 'os';
 
 dotenv.config({ path: '../.env' });
 
@@ -144,7 +145,8 @@ app.get('/health', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`
 🚀 Server running on port ${PORT}
 
@@ -156,5 +158,18 @@ Endpoints:
 Configuration:
   LiveKit API Key: ${LIVEKIT_API_KEY}
   FCM Status: ${firebaseInitialized ? '✓ Configured' : '✗ Not configured'}
+  External Access: http://${getIpAddress()}:${PORT}
   `);
 });
+
+function getIpAddress() {
+    const nets = networkInterfaces();
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal) {
+                return net.address;
+            }
+        }
+    }
+    return 'localhost';
+}

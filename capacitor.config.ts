@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'WhatsApp Video Call',
   webDir: 'dist',
   server: {
-    androidScheme: 'https'
+    androidScheme: 'http'
   },
   plugins: {
     PushNotifications: {

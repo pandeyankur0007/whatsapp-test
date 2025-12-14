@@ -47,6 +47,17 @@ class FCMService {
             // register
             await PushNotifications.register();
 
+            // Create notification channel for video calls
+            await PushNotifications.createChannel({
+                id: 'video_calls',
+                name: 'Video Calls',
+                description: 'Notifications for incoming video calls',
+                importance: 5, // High importance
+                visibility: 1, // Public visibility
+                sound: 'ringtone.mp3', // Custom sound if valid, else default
+                vibration: true
+            });
+
             // handling registration (getting token)
             PushNotifications.addListener('registration', (token) => {
                 console.log('Push Registration Token:', token.value);
@@ -85,7 +96,7 @@ class FCMService {
             if (permission === 'granted' && this.messaging) {
                 // Get VAPID key from: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
                 this.currentToken = await getToken(this.messaging, {
-                    vapidKey: '67166229406-av4l2tmlcu8ktjt6cls2gor820m959hb.apps.googleusercontent.com'
+                    vapidKey: 'BAV0tWXcZachTWtKYpHRUNzSXKt-sGeDk3O2UlcwjBwnOC6Cu1Qiig0sVbpbwg41JJwY_qa8DAY-ZueKTmh6utA'
                 });
 
                 console.log('Web FCM Token:', this.currentToken);
@@ -127,18 +138,91 @@ class FCMService {
     }
 
     private playRingtone(): void {
-        const audio = new Audio('/ringtone.mp3');
-        audio.loop = true;
-        audio.play().catch(err => console.error('Failed to play ringtone:', err));
-        (window as any).__ringtone = audio;
+        try {
+            // Try playing file first
+            const audio = new Audio('/ringtone.mp3');
+            audio.loop = true;
+
+            const promise = audio.play();
+            if (promise !== undefined) {
+                promise.catch(error => {
+                    console.log('Using synthetic ringtone (file not found)');
+                    this.playSynthRingtone();
+                });
+            }
+            (window as any).__ringtone = audio;
+        } catch (e) {
+            this.playSynthRingtone();
+        }
+    }
+
+    private playSynthRingtone(): void {
+        if ((window as any).__synthReq) return; // Already playing
+
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+
+        const ctx = new AudioContext();
+
+        // Try to resume if suspended (requires user gesture previously, but good to try)
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(err => console.warn('Could not resume audio context:', err));
+        }
+
+        let nextNoteTime = ctx.currentTime;
+
+        const scheduleRing = () => {
+            // High - Low tone pattern (classic phone ring)
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+
+            osc1.frequency.value = 800;
+            gain1.gain.value = 0.5; // Increased volume
+
+            osc1.start(nextNoteTime);
+            osc1.stop(nextNoteTime + 0.4);
+
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+
+            osc2.frequency.value = 600;
+            gain2.gain.value = 0.5; // Increased volume
+
+            osc2.start(nextNoteTime + 0.4);
+            osc2.stop(nextNoteTime + 0.8);
+
+            // Repeat every 2 seconds
+            nextNoteTime += 2;
+
+            // Keep loop going
+            (window as any).__synthReq = requestAnimationFrame(scheduleRing);
+        };
+
+        scheduleRing();
+        (window as any).__synthCtx = ctx;
     }
 
     stopRingtone(): void {
+        // Stop Audio Element
         const audio = (window as any).__ringtone;
         if (audio) {
             audio.pause();
             audio.currentTime = 0;
             delete (window as any).__ringtone;
+        }
+
+        // Stop Synth
+        if ((window as any).__synthCtx) {
+            (window as any).__synthCtx.close();
+            cancelAnimationFrame((window as any).__synthReq);
+            delete (window as any).__synthCtx;
+            delete (window as any).__synthReq;
         }
     }
 

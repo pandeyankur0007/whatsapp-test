@@ -44,6 +44,32 @@
   function switchTab(tab: "contacts" | "history") {
     currentTab = tab;
   }
+
+  // Handle user interaction to unlock AudioContext
+  function handleInteraction() {
+    const AudioContext =
+      window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContext) {
+      const ctx = new AudioContext();
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+      // Unlock Web Audio
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+
+      window.removeEventListener("click", handleInteraction);
+      window.removeEventListener("touchstart", handleInteraction);
+    }
+  }
+
+  onMount(() => {
+    window.addEventListener("click", handleInteraction);
+    window.addEventListener("touchstart", handleInteraction);
+  });
 </script>
 
 <main>
