@@ -485,7 +485,16 @@ class LiveKitService {
     private wasVideoEnabledBeforeBackground = false;
 
     async handleAppPause() {
-        console.log('App paused: managing tracks...');
+        console.log('App paused. Visibility:', document.visibilityState);
+
+        // If app is paused but still visible, we are likely in Picture-in-Picture mode
+        // In this case, we MUST keep the video running
+        if (document.visibilityState === 'visible') {
+            console.log('App paused but visible (PiP mode logic) - Keeping tracks active');
+            return;
+        }
+
+        console.log('App paused and hidden: managing tracks...');
         this.fpsMonitor.stop(); // Stop monitoring in background
         const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
         if (videoTrack && !videoTrack.isMuted) {
