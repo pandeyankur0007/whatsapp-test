@@ -5,6 +5,7 @@ import {
     RemoteParticipant,
     createLocalTracks,
     VideoPresets,
+    AudioPresets,
     ConnectionQuality,
     type LocalTrack,
     type RemoteTrackPublication,
@@ -14,6 +15,7 @@ import {
 
 import { callStore } from '../stores/call-store.svelte';
 import type { VideoTrackSettings, AudioTrackSettings } from '../types';
+import { FrameRateMonitor } from '../utils/performance';
 
 class LiveKitService {
     private room: Room | null = null;
@@ -24,6 +26,8 @@ class LiveKitService {
     private currentVideoResolution = VideoPresets.h540.resolution;
     private poorNetworkTimer: ReturnType<typeof setTimeout> | null = null;
     private isVideoMutedForNetwork = false;
+    private fpsMonitor = new FrameRateMonitor();
+    private wakeLock: any = null;
 
     // URL of your backend endpoint that returns a valid LiveKit token
     private tokenEndpoint = 'http://localhost:3000/token';
@@ -36,6 +40,13 @@ class LiveKitService {
             dynacast: true,
             videoCaptureDefaults: {
                 resolution: VideoPresets.h540.resolution,
+            },
+            publishDefaults: {
+                videoCodec: 'vp9',
+                backupCodec: { codec: 'h264' },
+                audioPreset: AudioPresets.speech,
+                dtx: true,
+                red: true,
             }
         });
         this.setupEventListeners();
@@ -146,9 +157,30 @@ class LiveKitService {
                     this.restoreVideoFromNetworkMute();
                 }
 
-                this.setVideoQuality('high');
+                // Restore high quality if not in low power mode
+                if (!this.isLowPowerMode) {
+                    this.setVideoQuality('high');
+                }
             }
         });
+    }
+
+    private isLowPowerMode = false;
+
+    public setLowPowerMode(enabled: boolean) {
+        if (this.isLowPowerMode === enabled) return;
+        this.isLowPowerMode = enabled;
+        console.log(`Low Power Mode ${enabled ? 'ENABLED' : 'DISABLED'} (Thermal/Perf)`);
+
+        if (enabled) {
+            this.setVideoQuality('low');
+            // Disable heavy UI effects if possible (handled by store usually)
+        } else {
+            // Only restore if network is good
+            if (callStore.connectionQuality !== 'poor') {
+                this.setVideoQuality('high');
+            }
+        }
     }
 
     // Fetch a fresh token from backend
@@ -202,10 +234,21 @@ class LiveKitService {
 
             console.log('Room connected successfully. State:', this.room.state);
 
+            // Start performance monitoring
+            this.fpsMonitor.start((fps) => {
+                callStore.updatePerformanceMetrics({ fps });
+                // If FPS drops below 45 consistently, enable low power mode
+                // This usually indicates thermal throttling or heavy background work
+                if (fps < 45 && !this.isLowPowerMode) this.setLowPowerMode(true);
+                // If FPS recovers well above 55, try restoring
+                if (fps > 55 && this.isLowPowerMode) this.setLowPowerMode(false);
+            });
+
             // Double check state before publishing
             if (this.room.state === 'connected') {
                 console.log('Publishing local tracks...');
                 await this.publishLocalTracks();
+                this.requestWakeLock();
             } else {
                 console.error('Room not connected after connect() call. Current state:', this.room.state);
             }
@@ -244,6 +287,8 @@ class LiveKitService {
                 simulcast: isVideo,
                 dtx: isAudio, // Discontinuous transmission (save bandwidth on silence)
                 red: isAudio, // Redundant encoding (FEC for audio)
+                videoCodec: isVideo ? 'vp9' : undefined,
+                backupCodec: isVideo ? { codec: 'h264' } : undefined,
             });
         }
 
@@ -424,6 +469,8 @@ class LiveKitService {
     async disconnect() {
         if (!this.room) return;
 
+        this.fpsMonitor.stop();
+        this.releaseWakeLock();
         for (const track of this.localTracks) track.stop();
         this.localTracks = [];
 
@@ -439,6 +486,7 @@ class LiveKitService {
 
     async handleAppPause() {
         console.log('App paused: managing tracks...');
+        this.fpsMonitor.stop(); // Stop monitoring in background
         const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
         if (videoTrack && !videoTrack.isMuted) {
             console.log('Stopping video track for background mode');
@@ -453,6 +501,13 @@ class LiveKitService {
 
     async handleAppResume() {
         console.log('App resumed: restoring tracks...');
+        // Restart monitoring
+        this.fpsMonitor.start((fps) => {
+            callStore.updatePerformanceMetrics({ fps });
+            if (fps < 45 && !this.isLowPowerMode) this.setLowPowerMode(true);
+            if (fps > 55 && this.isLowPowerMode) this.setLowPowerMode(false);
+        });
+
         if (this.wasVideoEnabledBeforeBackground) {
             const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
             if (videoTrack) {
@@ -465,6 +520,30 @@ class LiveKitService {
                 await videoTrack.unmute();
             }
             this.wasVideoEnabledBeforeBackground = false;
+        }
+    }
+    private async requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                this.wakeLock = await (navigator as any).wakeLock.request('screen');
+                console.log('Wake lock acquired');
+                this.wakeLock.addEventListener('release', () => {
+                    console.log('Wake lock released');
+                });
+            } catch (err) {
+                console.error(`Wake lock error: ${err}`);
+            }
+        }
+    }
+
+    private async releaseWakeLock() {
+        if (this.wakeLock) {
+            try {
+                await this.wakeLock.release();
+                this.wakeLock = null;
+            } catch (err) {
+                console.error(`Wake lock release error: ${err}`);
+            }
         }
     }
 }
