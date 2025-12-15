@@ -58,7 +58,7 @@ export interface PerformanceMetrics {
     fps: number;
     memoryUsage: number;
     cpuUsage?: number;
-    videoQuality: 'low' | 'medium' | 'high';
+    videoQuality: 'audio-only' | 'low' | 'medium' | 'high';
     networkQuality: number; // 0-100
 }
 

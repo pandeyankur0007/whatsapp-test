@@ -207,16 +207,20 @@
 
     .local-video {
         position: absolute;
-        top: calc(var(--spacing-xl) + env(safe-area-inset-top));
-        right: var(--spacing-lg);
+        top: calc(var(--spacing-md) + env(safe-area-inset-top));
+        right: var(--spacing-md);
         width: 120px;
         height: 160px;
-        border-radius: var(--radius-lg);
+        border-radius: 16px;
         overflow: hidden;
-        box-shadow: var(--shadow-3);
-        border: 2px solid rgba(255, 255, 255, 0.2);
+        background: #1a1a1a;
+        box-shadow:
+            0 8px 24px rgba(0, 0, 0, 0.4),
+            0 2px 4px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.3);
         z-index: var(--z-dropdown);
         transform: translateZ(0);
+        transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
     }
 
     @keyframes pulse {

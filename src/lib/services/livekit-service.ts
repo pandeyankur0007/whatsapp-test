@@ -20,6 +20,10 @@ class LiveKitService {
     private localTracks: LocalTrack[] = [];
     private reconnectAttempts = 0;
     private maxReconnectAttempts = 5;
+    private isVideoLowQuality = false;
+    private currentVideoResolution = VideoPresets.h540.resolution;
+    private poorNetworkTimer: ReturnType<typeof setTimeout> | null = null;
+    private isVideoMutedForNetwork = false;
 
     // URL of your backend endpoint that returns a valid LiveKit token
     private tokenEndpoint = 'http://localhost:3000/token';
@@ -123,7 +127,26 @@ class LiveKitService {
             callStore.connectionQuality = qualityMap[quality] as 'excellent' | 'good' | 'poor';
 
             if (quality === ConnectionQuality.Poor) {
-                this.degradeVideoQuality();
+                this.setVideoQuality('low');
+                // If poor connection persists for 10 seconds, switch to audio-only
+                if (!this.poorNetworkTimer && !this.isVideoMutedForNetwork) {
+                    this.poorNetworkTimer = setTimeout(() => {
+                        this.muteVideoForNetwork();
+                    }, 10000);
+                }
+            } else if (quality === ConnectionQuality.Good || quality === ConnectionQuality.Excellent) {
+                // Clear any pending audio-only switch
+                if (this.poorNetworkTimer) {
+                    clearTimeout(this.poorNetworkTimer);
+                    this.poorNetworkTimer = null;
+                }
+
+                // Restore video if it was muted purely for network reasons
+                if (this.isVideoMutedForNetwork) {
+                    this.restoreVideoFromNetworkMute();
+                }
+
+                this.setVideoQuality('high');
             }
         });
     }
@@ -216,8 +239,11 @@ class LiveKitService {
         for (const track of this.localTracks) {
             // Enable simulcast for video tracks to allow adaptive stream switching
             const isVideo = track.kind === Track.Kind.Video;
+            const isAudio = track.kind === Track.Kind.Audio;
             await this.room?.localParticipant.publishTrack(track, {
                 simulcast: isVideo,
+                dtx: isAudio, // Discontinuous transmission (save bandwidth on silence)
+                red: isAudio, // Redundant encoding (FEC for audio)
             });
         }
 
@@ -242,6 +268,17 @@ class LiveKitService {
     async toggleCamera() {
         const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
         if (!videoTrack) return;
+
+        // Reset network pause flags because user is manually taking control
+        if (this.isVideoMutedForNetwork) {
+            // this.isVideoPausedForNetwork is not used anymore, but just in case
+            this.isVideoMutedForNetwork = false;
+            if (this.poorNetworkTimer) clearTimeout(this.poorNetworkTimer);
+        }
+
+        // When manually toggling, we maintain the current quality adaptation state
+        // unless it was fully muted due to network, in which case unmuting is the user's intent.
+
         if (callStore.isVideoMuted) await videoTrack.unmute();
         else await videoTrack.mute();
         callStore.toggleVideo();
@@ -315,9 +352,73 @@ class LiveKitService {
         }
     }
 
-    private async degradeVideoQuality() {
+    private async setVideoQuality(quality: 'low' | 'high') {
+        const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
+        if (!videoTrack || !this.room || callStore.isVideoMuted) return;
+
+        // Prevent unnecessary restarts
+        if (quality === 'low' && this.isVideoLowQuality) return;
+        if (quality === 'high' && !this.isVideoLowQuality) return;
+
+        this.isVideoLowQuality = (quality === 'low');
+        callStore.updatePerformanceMetrics({ videoQuality: quality });
+
+        console.log(`Adapting video quality to: ${quality}`);
+
+        try {
+            if (quality === 'low') {
+                // Lower FPS and Resolution for poor network
+                // Cast to any to bypass protected visibility if TS complains - restart is public in runtime
+                await (videoTrack as any).restart({
+                    ...(VideoPresets.h360.resolution),
+                    frameRate: 15,
+                });
+            } else {
+                // Restore standard quality
+                await (videoTrack as any).restart({
+                    ...(VideoPresets.h540.resolution),
+                    frameRate: 24,
+                });
+            }
+        } catch (error) {
+            console.error('Failed to adapt video quality:', error);
+        }
+    }
+
+    private async muteVideoForNetwork() {
+        if (this.isVideoMutedForNetwork || callStore.isVideoMuted) return;
+
         const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
-        if (videoTrack) callStore.updatePerformanceMetrics({ videoQuality: 'low' });
+        if (videoTrack && !videoTrack.isMuted) {
+            console.log('Network critical: Disabling video to preserve audio');
+            try {
+                await videoTrack.mute();
+                this.isVideoMutedForNetwork = true;
+                callStore.updatePerformanceMetrics({ videoQuality: 'audio-only' });
+            } catch (e) {
+                console.error('Failed to mute for network:', e);
+            }
+        }
+    }
+
+    private async restoreVideoFromNetworkMute() {
+        if (!this.isVideoMutedForNetwork) return;
+
+        this.isVideoMutedForNetwork = false;
+
+        // If user manually muted broadly, we don't unmute
+        if (callStore.isVideoMuted) return;
+
+        const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
+        if (videoTrack) {
+            console.log('Network recovering: Restoring video track');
+            try {
+                await videoTrack.unmute();
+                // setVideoQuality('high') will be called by the event listener
+            } catch (e) {
+                console.error('Failed to restore video from network mute:', e);
+            }
+        }
     }
 
     async disconnect() {
@@ -338,22 +439,29 @@ class LiveKitService {
 
     async handleAppPause() {
         console.log('App paused: managing tracks...');
-        const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
+        const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
         if (videoTrack && !videoTrack.isMuted) {
-            console.log('Pausing video track for background mode');
+            console.log('Stopping video track for background mode');
             this.wasVideoEnabledBeforeBackground = true;
+            // Mute first to notify server
             await videoTrack.mute();
-            // We do NOT update callStore state here so the UI remains "Video On" 
-            // but the track is technically muted to save resources/comply with OS.
+            // Explicitly STOP the media stream to release Android Camera Hardware
+            // This prevents "Handler on dead thread" and "CameraCaptureSession" leaks
+            videoTrack.mediaStreamTrack.stop();
         }
     }
 
     async handleAppResume() {
         console.log('App resumed: restoring tracks...');
         if (this.wasVideoEnabledBeforeBackground) {
-            const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video);
+            const videoTrack = this.localTracks.find(t => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined;
             if (videoTrack) {
-                console.log('Resuming video track from background mode');
+                console.log('Restarting video track from background mode');
+                // Use restart because the previous stream was stopped
+                await (videoTrack as any).restart({
+                    ...(this.isVideoLowQuality ? VideoPresets.h360.resolution : VideoPresets.h540.resolution),
+                });
+                // Ensure it's unmuted (restart usually unmutes, but just in case)
                 await videoTrack.unmute();
             }
             this.wasVideoEnabledBeforeBackground = false;
