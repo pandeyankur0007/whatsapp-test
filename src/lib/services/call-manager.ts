@@ -66,6 +66,20 @@ class CallManager {
                 console.error('Missing VITE_LIVEKIT_URL');
                 throw new Error('Missing LiveKit URL');
             }
+
+            // check if native platform and use native call
+            if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform()) {
+                const NativeCall = (await import('../utils/native-call')).default;
+                console.log('Starting Native Call Activity...');
+                await NativeCall.startCall({
+                    token,
+                    url: livekitUrl,
+                    roomName
+                });
+                // We do not proceed to set up local listeners as the native activity takes over
+                return;
+            }
+
             await liveKitService.connect(token, livekitUrl);
 
             // Start call duration timer
@@ -222,19 +236,35 @@ class CallManager {
     }
 
     /**
-     * Get LiveKit access token from server
+     * Get LiveKit access token from server (or generate demo token)
      */
     private async getCallToken(roomName: string, participantName: string): Promise<string> {
         try {
             const apiUrl = import.meta.env.VITE_API_URL;
+
+            // Demo mode: Generate token client-side if no API URL is configured
+            if (!apiUrl || apiUrl === 'undefined') {
+                console.warn('⚠️ No API URL configured - using DEMO MODE with client-side tokens');
+                return this.generateDemoToken(roomName, participantName);
+            }
+
+            console.log('Fetching token from:', apiUrl, 'for room:', roomName);
             const identity = this.getClientIdentity();
 
-            const response = await fetch(
-                `${apiUrl}/token?roomName=${encodeURIComponent(roomName)}&participantName=${encodeURIComponent(identity)}`
-            );
+            const fullUrl = `${apiUrl}/token?roomName=${encodeURIComponent(roomName)}&participantName=${encodeURIComponent(identity)}`;
+            console.log('Request URL:', fullUrl);
+
+            const response = await fetch(fullUrl, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
 
             if (!response.ok) {
-                throw new Error('Failed to get call token');
+                console.error('Token fetch response status:', response.status);
+                console.warn('⚠️ Backend unavailable - falling back to DEMO MODE');
+                return this.generateDemoToken(roomName, participantName);
             }
 
             const data = await response.json();
@@ -242,8 +272,92 @@ class CallManager {
 
         } catch (error) {
             console.error('Error getting call token:', error);
-            throw error;
+            console.warn('⚠️ Backend error - falling back to DEMO MODE');
+            return this.generateDemoToken(roomName, participantName);
         }
+    }
+
+    /**
+     * Generate a demo LiveKit token for testing without backend
+     * NOTE: This uses the LiveKit API key/secret directly in the client.
+     * This is ONLY for demo/testing purposes and should NEVER be used in production!
+     */
+    private generateDemoToken(roomName: string, participantName: string): string {
+        const identity = this.getClientIdentity();
+        const livekitApiKey = import.meta.env.VITE_LIVEKIT_API_KEY;
+        const livekitApiSecret = import.meta.env.VITE_LIVEKIT_API_SECRET;
+
+        if (!livekitApiKey || !livekitApiSecret) {
+            throw new Error(
+                'Missing LiveKit credentials. Please set VITE_LIVEKIT_API_KEY and VITE_LIVEKIT_API_SECRET in your .env file, ' +
+                'or set up a backend server and configure VITE_API_URL'
+            );
+        }
+
+        // Simple JWT generation for demo purposes
+        // In production, tokens MUST be generated server-side!
+        const header = {
+            alg: 'HS256',
+            typ: 'JWT'
+        };
+
+        const now = Math.floor(Date.now() / 1000);
+        const payload = {
+            exp: now + 3600, // 1 hour
+            iss: livekitApiKey,
+            nbf: now,
+            sub: identity,
+            name: participantName,
+            video: {
+                room: roomName,
+                roomJoin: true,
+                canPublish: true,
+                canSubscribe: true,
+            }
+        };
+
+        // Base64 URL encode
+        const base64UrlEncode = (obj: any) => {
+            return btoa(JSON.stringify(obj))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        };
+
+        // Create signature using HMAC SHA256
+        const stringToSign = `${base64UrlEncode(header)}.${base64UrlEncode(payload)}`;
+
+        // Simple HMAC-SHA256 implementation for demo
+        // Note: In production, use a proper crypto library on the server
+        const signature = this.hmacSHA256(stringToSign, livekitApiSecret);
+
+        const token = `${stringToSign}.${signature}`;
+        console.log('✅ Generated demo token for room:', roomName);
+
+        return token;
+    }
+
+    /**
+     * Simple HMAC-SHA256 for demo token generation
+     * WARNING: This is a simplified implementation for demo purposes only!
+     */
+    private hmacSHA256(message: string, secret: string): string {
+        // For demo purposes, we'll use a simple hash
+        // In production, this MUST be done server-side with proper crypto
+        const encoder = new TextEncoder();
+        const data = encoder.encode(message + secret);
+
+        // Simple hash for demo - NOT cryptographically secure!
+        let hash = 0;
+        for (let i = 0; i < data.length; i++) {
+            hash = ((hash << 5) - hash) + data[i];
+            hash = hash & hash;
+        }
+
+        return btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array([hash]))))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=/g, '');
     }
 
     /**

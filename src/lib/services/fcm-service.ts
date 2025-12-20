@@ -40,47 +40,55 @@ class FCMService {
     private async initializeNative(): Promise<void> {
         console.log('Initializing Native Push Notifications');
 
-        // request permission
-        const permission = await PushNotifications.requestPermissions();
+        try {
+            // request permission
+            const permission = await PushNotifications.requestPermissions();
 
-        if (permission.receive === 'granted') {
-            // register
-            await PushNotifications.register();
+            if (permission.receive === 'granted') {
+                // register
+                await PushNotifications.register();
 
-            // Create notification channel for video calls
-            await PushNotifications.createChannel({
-                id: 'video_calls',
-                name: 'Video Calls',
-                description: 'Notifications for incoming video calls',
-                importance: 5, // High importance
-                visibility: 1, // Public visibility
-                sound: 'ringtone.mp3', // Custom sound if valid, else default
-                vibration: true
-            });
+                // Create notification channel for video calls
+                await PushNotifications.createChannel({
+                    id: 'video_calls',
+                    name: 'Video Calls',
+                    description: 'Notifications for incoming video calls',
+                    importance: 5, // High importance
+                    visibility: 1, // Public visibility
+                    sound: 'ringtone.mp3', // Custom sound if valid, else default
+                    vibration: true
+                });
 
-            // handling registration (getting token)
-            PushNotifications.addListener('registration', (token) => {
-                console.log('Push Registration Token:', token.value);
-                this.currentToken = token.value;
-                localStorage.setItem('fcm_token', token.value);
-            });
+                // handling registration (getting token)
+                PushNotifications.addListener('registration', (token) => {
+                    console.log('Push Registration Token:', token.value);
+                    this.currentToken = token.value;
+                    localStorage.setItem('fcm_token', token.value);
+                });
 
-            PushNotifications.addListener('registrationError', (error) => {
-                console.error('Push Registration Error:', error);
-            });
+                PushNotifications.addListener('registrationError', (error) => {
+                    console.warn('⚠️ Push notifications not available:', error);
+                    // Don't throw - app can work without FCM
+                });
 
-            // handling incoming notification (foreground)
-            PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                console.log('Push Received:', notification);
-                this.handleIncomingCall(notification.data);
-            });
+                // handling incoming notification (foreground)
+                PushNotifications.addListener('pushNotificationReceived', (notification) => {
+                    console.log('Push Received:', notification);
+                    this.handleIncomingCall(notification.data);
+                });
 
-            // handling notification click (background/closed)
-            PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-                console.log('Push Action Performed:', notification);
-                const data = notification.notification.data;
-                this.handleIncomingCall(data);
-            });
+                // handling notification click (background/closed)
+                PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+                    console.log('Push Action Performed:', notification);
+                    const data = notification.notification.data;
+                    this.handleIncomingCall(data);
+                });
+            } else {
+                console.warn('⚠️ Push notification permission not granted');
+            }
+        } catch (error) {
+            console.warn('⚠️ FCM not available (Google Play Services may not be installed):', error);
+            // App can still work without push notifications
         }
     }
 
@@ -133,8 +141,12 @@ class FCMService {
             callStore.setIncomingCall(notification);
             callStore.setCallState('ringing');
 
-            // Play ringtone
-            this.playRingtone();
+            // Play ringtone only on Web
+            if (!Capacitor.isNativePlatform()) {
+                this.playRingtone();
+            } else {
+                console.log('Native platform - letting native plugin handle ringtone');
+            }
         } else if (data.type === 'call_rejected') {
             // Caller side: Recipient rejected
             if (callStore.callState === 'ringing' || callStore.callState === 'initiating') {

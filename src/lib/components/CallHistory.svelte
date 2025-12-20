@@ -140,18 +140,38 @@
 
                         <div class="call-duration {entry.type}">
                             {formatDuration(entry.duration)}
+                            {#if entry.wasVideoCall && entry.type !== "missed"}
+                                <span class="active-badge">Active</span>
+                            {/if}
                         </div>
 
-                        <button
-                            class="video-call-btn"
-                            aria-label="Video call {entry.contactName}"
-                        >
-                            <svg viewBox="0 0 24 24" fill="currentColor">
-                                <path
-                                    d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
-                                />
-                            </svg>
-                        </button>
+                        {#if entry.wasVideoCall && entry.type !== "missed"}
+                            <button
+                                class="join-call-btn"
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    handleCallBack(entry);
+                                }}
+                                aria-label="Join call with {entry.contactName}"
+                            >
+                                Join
+                            </button>
+                        {:else}
+                            <button
+                                class="video-call-btn"
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    handleCallBack(entry);
+                                }}
+                                aria-label="Video call {entry.contactName}"
+                            >
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+                                    />
+                                </svg>
+                            </button>
+                        {/if}
                     </div>
                 {/each}
             </div>
@@ -310,5 +330,33 @@
     .video-call-btn svg {
         width: 20px;
         height: 20px;
+    }
+
+    .active-badge {
+        font-size: 10px;
+        background: var(--success);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-weight: 600;
+        margin-left: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .join-call-btn {
+        background: var(--success);
+        color: white;
+        border: none;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: transform 0.1s;
+    }
+
+    .join-call-btn:active {
+        transform: scale(0.95);
     }
 </style>

@@ -8,6 +8,7 @@
   import { fcmService } from "./lib/services/fcm-service";
   import { liveKitService } from "./lib/services/livekit-service";
   import { App } from "@capacitor/app";
+  import { callManager } from "./lib/services/call-manager";
   import { initializeDemoData } from "./lib/services/storage-service";
   import { FrameRateMonitor } from "./lib/utils/performance";
 
@@ -15,8 +16,10 @@
   import CallHistory from "./lib/components/CallHistory.svelte";
   import CallScreen from "./lib/components/CallScreen.svelte";
   import IncomingCallOverlay from "./lib/components/IncomingCallOverlay.svelte";
+  import type { Contact } from "./lib/types";
 
-  let currentTab = $state<"contacts" | "history">("contacts");
+  let currentTab = $state<"contacts" | "history" | "contact-info">("contacts");
+  let selectedContact = $state<Contact | null>(null);
   let fpsMonitor: FrameRateMonitor;
   let isInitialized = $state(false);
 
@@ -53,8 +56,19 @@
     }
   });
 
-  function switchTab(tab: "contacts" | "history") {
+  function switchTab(tab: "contacts" | "history" | "contact-info") {
     currentTab = tab;
+  }
+
+  function openContactInfo(contact: Contact) {
+    selectedContact = contact;
+    currentTab = "contact-info";
+  }
+
+  function goBack() {
+    if (currentTab === "contact-info") {
+      currentTab = "contacts";
+    }
   }
 
   // Handle user interaction to unlock AudioContext
@@ -139,9 +153,61 @@
       <!-- Content area -->
       <div class="content">
         {#if currentTab === "contacts"}
-          <ContactList />
-        {:else}
+          <ContactList {openContactInfo} />
+        {:else if currentTab === "history"}
           <CallHistory />
+        {:else if currentTab === "contact-info" && selectedContact}
+          <div class="contact-info-view">
+            <header class="chat-header safe-area-top">
+              <div class="header-left">
+                <button
+                  class="back-btn"
+                  onclick={goBack}
+                  aria-label="Back to contacts"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path d="m15 18-6-6 6-6"></path>
+                  </svg>
+                </button>
+                <span>Contact Info</span>
+              </div>
+            </header>
+            <div class="info-content">
+              <div class="large-avatar pulse">
+                {#if selectedContact.avatar}
+                  <img
+                    src={selectedContact.avatar}
+                    alt={selectedContact.name}
+                  />
+                {:else}
+                  <div class="avatar-placeholder">
+                    {selectedContact.name.charAt(0).toUpperCase()}
+                  </div>
+                {/if}
+              </div>
+              <h2>{selectedContact.name}</h2>
+              <p class="phone">{selectedContact.phoneNumber}</p>
+
+              <div class="info-actions">
+                <button
+                  class="info-action-btn"
+                  onclick={() => callManager.initiateCall(selectedContact!)}
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                      d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"
+                    />
+                  </svg>
+                  <span>Video Call</span>
+                </button>
+              </div>
+            </div>
+          </div>
         {/if}
       </div>
     </div>
@@ -189,6 +255,8 @@
     color: var(--text-secondary);
     transition: color var(--transition-fast);
     position: relative;
+    background: transparent;
+    border: none;
   }
 
   .tab svg {
@@ -257,5 +325,59 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  /* Contact Info Styles */
+  .contact-info-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 100;
+  }
+
+  .info-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--spacing-xl);
+    gap: var(--spacing-lg);
+  }
+
+  .large-avatar {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: var(--shadow-3);
+  }
+
+  .large-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .info-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+  }
+
+  .info-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-xs);
+    background: transparent;
+    border: none;
+    color: var(--primary);
+  }
+
+  .info-action-btn svg {
+    width: 32px;
+    height: 32px;
   }
 </style>

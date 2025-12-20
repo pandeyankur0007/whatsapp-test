@@ -7,6 +7,12 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     @Override
+    public void onCreate(android.os.Bundle savedInstanceState) {
+        registerPlugin(NativeCallPlugin.class);
+        super.onCreate(savedInstanceState);
+    }
+
+    @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
         

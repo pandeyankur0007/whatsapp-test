@@ -14,6 +14,12 @@
 
     import { fcmService } from "../services/fcm-service";
 
+    let {
+        openContactInfo,
+    }: {
+        openContactInfo: (contact: Contact) => void;
+    } = $props();
+
     let contacts = $state<Contact[]>([]);
     let filteredContacts = $state<Contact[]>([]);
     let searchQuery = $state("");
@@ -99,10 +105,14 @@
                   getScrollElement: () => scrollContainer,
                   estimateSize: () => 72,
                   overscan: 5,
-                  observeElementResize: (instance, cb) => {
-                      const ro = new ResizeObserver(cb);
-                      ro.observe(instance.scrollElement);
-                      return ro;
+                  observeElementRect: (instance, cb) => {
+                      const ro = new ResizeObserver((entries) => {
+                          cb(entries[0].contentRect);
+                      });
+                      if (instance.scrollElement) {
+                          ro.observe(instance.scrollElement);
+                      }
+                      return () => ro.disconnect();
                   },
               })
             : null,
@@ -181,7 +191,21 @@
                         role="button"
                         tabindex="0"
                     >
-                        <div class="contact-avatar">
+                        <div
+                            class="contact-avatar"
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                openContactInfo(contact);
+                            }}
+                            onkeydown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.stopPropagation();
+                                    openContactInfo(contact);
+                                }
+                            }}
+                            role="button"
+                            tabindex="0"
+                        >
                             {#if contact.avatar}
                                 <img
                                     src={contact.avatar}
@@ -216,6 +240,10 @@
                             <button
                                 class="action-btn call-btn"
                                 aria-label="Call {contact.name}"
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    handleCallContact(contact);
+                                }}
                             >
                                 <svg viewBox="0 0 24 24" fill="currentColor">
                                     <path
@@ -237,225 +265,197 @@
         flex-direction: column;
         height: 100%;
         background: var(--background);
+        color: var(--text-primary);
     }
 
     .header {
-        padding: var(--spacing-lg);
-        padding-top: calc(var(--spacing-lg) + env(safe-area-inset-top));
+        padding: 10px 16px;
+        padding-top: calc(10px + env(safe-area-inset-top));
         background: var(--background-secondary);
-        border-bottom: 1px solid var(--surface);
-    }
-
-    h1 {
-        font-size: var(--font-size-xl);
-        font-weight: 600;
-        margin-bottom: var(--spacing-md);
-    }
-
-    .search-box {
-        position: relative;
         display: flex;
-        align-items: center;
-    }
-
-    .search-icon {
-        position: absolute;
-        left: var(--spacing-md);
-        width: 20px;
-        height: 20px;
-        color: var(--text-tertiary);
-        pointer-events: none;
-    }
-
-    .search-box input {
-        width: 100%;
-        padding: var(--spacing-sm) var(--spacing-md);
-        padding-left: 40px;
-        background: var(--surface);
-        border-radius: var(--radius-md);
-        color: var(--text-primary);
-        font-size: var(--font-size-md);
-    }
-
-    .search-box input::placeholder {
-        color: var(--text-tertiary);
-    }
-
-    .contact-scroll {
-        flex: 1;
-        overflow-y: auto;
-        overflow-x: hidden;
-    }
-
-    .contact-item {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-md);
-        padding: var(--spacing-md) var(--spacing-lg);
-        width: 100%;
-        height: 72px;
-        cursor: pointer;
-        transition: background-color var(--transition-fast);
-    }
-
-    .contact-item:hover {
-        background: var(--surface-hover);
-    }
-
-    .contact-item:active {
-        background: var(--surface);
-    }
-
-    .contact-avatar {
-        position: relative;
-        width: 48px;
-        height: 48px;
-        flex-shrink: 0;
-    }
-
-    .contact-avatar img {
-        width: 100%;
-        height: 100%;
-        border-radius: var(--radius-full);
-        object-fit: cover;
-    }
-
-    .avatar-placeholder {
-        width: 100%;
-        height: 100%;
-        border-radius: var(--radius-full);
-        background: var(--primary);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 600;
-        font-size: var(--font-size-lg);
-    }
-
-    .online-indicator {
-        position: absolute;
-        bottom: 0;
-        right: 0;
-        width: 12px;
-        height: 12px;
-        background: var(--success);
-        border: 2px solid var(--background);
-        border-radius: var(--radius-full);
-    }
-
-    .contact-info {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .contact-name {
-        font-size: var(--font-size-md);
-        font-weight: 500;
-        color: var(--text-primary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .contact-phone {
-        font-size: var(--font-size-sm);
-        color: var(--text-secondary);
+        flex-direction: column;
+        gap: 10px;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+        z-index: 10;
     }
 
     .header-top {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: var(--spacing-sm);
+        height: 48px;
     }
 
-    .token-btn {
-        background: rgba(255, 255, 255, 0.1);
-        border: none;
-        color: var(--text-secondary);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        cursor: pointer;
+    h1 {
+        font-size: 20px;
+        font-weight: 500;
+        color: var(
+            --text-secondary
+        ); /* WhatsApp uses secondary color for title */
     }
 
-    .my-token-box {
-        background: var(--surface-secondary);
-        padding: var(--spacing-sm);
-        border-radius: var(--radius-md);
-        margin-bottom: var(--spacing-md);
-        font-size: 12px;
-    }
-
-    .my-token-box p {
-        margin-bottom: 4px;
-        color: var(--text-secondary);
-    }
-
-    .token-value {
-        font-family: monospace;
-        background: rgba(0, 0, 0, 0.2);
-        padding: 8px;
-        border-radius: 4px;
+    .search-box {
+        background: var(--surface);
+        border-radius: 8px;
+        height: 36px;
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        cursor: pointer;
+        padding: 0 12px;
     }
 
+    .search-icon {
+        width: 18px;
+        height: 18px;
+        color: var(--text-secondary);
+        margin-right: 12px;
+    }
+
+    .search-box input {
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        width: 100%;
+        font-size: 15px;
+        outline: none;
+    }
+
+    .contact-scroll {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    /* WhatsApp List Item Style */
+    .contact-item {
+        display: flex;
+        align-items: center;
+        padding: 0 16px; /* WhatsApp padding */
+        height: 72px; /* WhatsApp standard row height */
+        width: 100%;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .contact-item:active {
+        background: rgba(255, 255, 255, 0.05); /* Subtle ripple effect */
+    }
+
+    .contact-avatar {
+        width: 48px;
+        height: 48px;
+        margin-right: 16px;
+        position: relative;
+    }
+
+    .contact-avatar img,
+    .avatar-placeholder {
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .avatar-placeholder {
+        background: var(--surface-hover);
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 20px;
+        border: none; /* Removed border */
+    }
+
+    .contact-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        height: 100%;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Separator */
+        padding-right: 8px;
+    }
+
+    .contact-name {
+        font-size: 17px;
+        font-weight: 500; /* WhatsApp uses medium weight */
+        color: var(--text-primary);
+        margin-bottom: 2px;
+    }
+
+    .contact-phone {
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+
+    /* Call Action similar to WhatsApp Calls tab */
     .actions {
         display: flex;
-        gap: var(--spacing-sm);
+        align-items: center;
+        height: 100%;
+        padding-left: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
 
-    .action-btn {
+    .call-btn {
         width: 40px;
         height: 40px;
         border-radius: 50%;
         border: none;
+        background: transparent;
+        color: var(--primary); /* WhatsApp Green */
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .call-btn {
-        background: var(--primary);
-        color: white;
-    }
-
-    .edit-btn {
-        background: var(--surface-secondary);
-        color: var(--text-secondary);
-        font-size: 14px;
-    }
-
-    .call-btn:active,
-    .edit-btn:active {
-        transform: scale(0.95);
+    .call-btn:active {
+        background: rgba(37, 211, 102, 0.1);
     }
 
     .call-btn svg {
-        width: 20px;
-        height: 20px;
+        width: 24px; /* Larger icon */
+        height: 24px;
+    }
+
+    /* Utilities */
+    .online-indicator {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 12px;
+        height: 12px;
+        background: var(--success);
+        border: 2px solid var(--background);
+        border-radius: 50%;
     }
 
     .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 100%;
-        color: var(--text-tertiary);
-        gap: var(--spacing-sm);
-        padding: var(--spacing-xl);
+        padding: 40px;
         text-align: center;
+        color: var(--text-secondary);
     }
 
-    .empty-state p {
-        font-size: var(--font-size-lg);
+    /* Token UI */
+    .token-btn {
+        color: var(--primary);
+        background: transparent;
         font-weight: 500;
+        font-size: 14px;
+        border: none;
+    }
+
+    .my-token-box {
+        margin: 0 16px 10px 16px;
+        padding: 12px;
+        background: var(--surface);
+        border-radius: 8px;
+    }
+
+    .token-value {
+        font-family: monospace;
+        color: var(--text-primary);
+        margin-top: 4px;
+        font-size: 13px;
     }
 </style>

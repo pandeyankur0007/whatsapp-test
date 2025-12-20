@@ -103,24 +103,19 @@ app.post('/call/notify', async (req, res) => {
 
         const message = {
             token: recipientToken,
-            notification: {
-                title: `${callerName} is calling...`,
-                body: 'WhatsApp Video Call',
-            },
-            data: {
+            // notification: { ... }  <-- REMOVED: Triggers system tray notification automatically, bypassing onMessageReceived
+            data: { // Use data payload for custom information
                 type: type || 'incoming_call',
                 callerName,
                 roomName,
                 callerAvatar: callerAvatar || '',
                 callId: `call_${Date.now()}`,
+                livekitToken: await generateCalleeToken(callerName, roomName) // Generate token for callee (using callerName as identity for now, or random)
             },
             android: {
                 priority: 'high',
-                notification: {
-                    channelId: 'video_calls',
-                    sound: 'default',
-                },
-            },
+                // notification: { ... } <-- REMOVED
+            }
         };
 
         const response = await admin.messaging().send(message);
@@ -162,6 +157,7 @@ Configuration:
   `);
 });
 
+
 function getIpAddress() {
     const nets = networkInterfaces();
     for (const name of Object.keys(nets)) {
@@ -172,4 +168,21 @@ function getIpAddress() {
         }
     }
     return 'localhost';
+}
+
+async function generateCalleeToken(participantName, roomName) {
+    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+        identity: `user_${Math.floor(Math.random() * 10000)}`, // Generate a random identity for the callee for now, or use recipientToken if it was an ID
+        name: 'Recipient',
+        ttl: '2h',
+    });
+
+    at.addGrant({
+        room: roomName,
+        roomJoin: true,
+        canPublish: true,
+        canSubscribe: true,
+    });
+
+    return await at.toJwt();
 }

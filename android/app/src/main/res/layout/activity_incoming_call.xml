@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background">
+
+    <!-- Caller Avatar -->
+    <FrameLayout
+        android:id="@+id/avatar_container"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/caller_name"
+        app:layout_constraintVertical_bias="0.3">
+
+        <ImageView
+            android:id="@+id/caller_avatar"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:id="@+id/caller_initials"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:background="@drawable/circle_background"
+            android:textSize="72sp"
+            android:textColor="@color/white"
+            android:fontFamily="sans-serif-medium"
+            android:elevation="4dp" />
+    </FrameLayout>
+
+    <!-- Caller Name -->
+    <TextView
+        android:id="@+id/caller_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Unknown Caller"
+        android:textSize="32sp"
+        android:textColor="@color/text_primary"
+        android:fontFamily="sans-serif-medium"
+        android:layout_marginTop="32dp"
+        app:layout_constraintTop_toBottomOf="@id/avatar_container"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Call Type Label -->
+    <TextView
+        android:id="@+id/call_type"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="WhatsApp Video Call"
+        android:textSize="16sp"
+        android:textColor="@color/text_secondary"
+        android:layout_marginTop="8dp"
+        app:layout_constraintTop_toBottomOf="@id/caller_name"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Action Buttons Container -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingHorizontal="48dp"
+        android:paddingBottom="48dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Reject Button -->
+        <Button
+            android:id="@+id/btn_reject"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginEnd="48dp"
+            android:background="@drawable/circle_button_reject"
+            android:drawableTop="@drawable/ic_call_end"
+            android:elevation="8dp"
+            android:stateListAnimator="@null" />
+
+        <!-- Accept Button -->
+        <Button
+            android:id="@+id/btn_accept"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:background="@drawable/circle_button_accept"
+            android:drawableTop="@drawable/ic_call_accept"
+            android:elevation="8dp"
+            android:stateListAnimator="@null" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

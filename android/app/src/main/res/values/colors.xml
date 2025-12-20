@@ -3,4 +3,10 @@
     <color name="colorPrimary">#0D8E53</color>
     <color name="colorPrimaryDark">#075E54</color>
     <color name="colorAccent">#25D366</color>
+    
+    <!-- WhatsApp-like colors -->
+    <color name="background">#111B21</color>
+    <color name="white">#FFFFFF</color>
+    <color name="text_primary">#E9EDEF</color>
+    <color name="text_secondary">#8696A0</color>
 </resources>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_margin="2dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="0dp"
+    app:cardBackgroundColor="#222222">
+
+    <io.livekit.android.renderer.TextureViewRenderer
+        android:id="@+id/participant_video_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Identity Label -->
+    <TextView
+        android:id="@+id/participant_identity"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:background="#80000000"
+        android:padding="4dp"
+        android:text="User"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp" />
+
+    <!-- Speaker Indicator -->
+    <View
+        android:id="@+id/active_speaker_indicator"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/active_speaker_border"
+        android:visibility="gone" />
+
+</androidx.cardview.widget.CardView>
