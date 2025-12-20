@@ -50,6 +50,7 @@
 
         <!-- Indicators Overlay (Top) -->
         <LinearLayout
+            android:id="@+id/ll_top"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
@@ -205,21 +206,18 @@
             android:contentDescription="Toggle Video"
             android:src="@android:drawable/ic_menu_camera" />
 
-    </LinearLayout>
+        <ImageButton
+            android:id="@+id/btn_switch_camera"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="16dp"
+            android:background="@android:drawable/btn_default_small"
+            android:contentDescription="Switch Camera"
+            android:src="@android:drawable/ic_menu_rotate"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:tint="#FFFFFF" />
 
-    <!-- Switch Camera (Top Right) -->
-    <ImageButton
-        android:id="@+id/btn_switch_camera"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginTop="48dp"
-        android:layout_marginEnd="16dp"
-        android:background="@android:color/transparent"
-        android:contentDescription="Switch Camera"
-        android:src="@android:drawable/ic_menu_rotate"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:tint="#FFFFFF" />
+    </LinearLayout>
 
     <!-- Loading Indicator -->
     <ProgressBar

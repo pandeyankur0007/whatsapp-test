@@ -74,7 +74,8 @@ class CallManager {
                 await NativeCall.startCall({
                     token,
                     url: livekitUrl,
-                    roomName
+                    roomName,
+                    recipientToken: contact.fcmToken
                 });
                 // We do not proceed to set up local listeners as the native activity takes over
                 return;

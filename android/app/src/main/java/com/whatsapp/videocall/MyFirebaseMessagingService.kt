@@ -30,17 +30,35 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         if (type == "incoming_call") {
             handleIncomingCall(remoteMessage)
+        } else if (type == "call_ended") {
+            handleCallEnded(remoteMessage)
         } else {
             super.onMessageReceived(remoteMessage)
         }
     }
 
+    private fun handleCallEnded(remoteMessage: RemoteMessage) {
+        val roomName = remoteMessage.data["roomName"] ?: return
+        
+        // Cancel Notification
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(roomName.hashCode())
+
+        // Broadcast to Activities to close
+        val intent = Intent("com.whatsapp.videocall.ACTION_CALL_ENDED")
+        intent.putExtra("ROOM_NAME", roomName)
+        intent.setPackage(packageName)
+        sendBroadcast(intent)
+        
+        Log.d("MyFCM", "Call ended signal received for room: $roomName")
+    }
     private fun handleIncomingCall(remoteMessage: RemoteMessage) {
         val data = remoteMessage.data
         val roomName = data["roomName"] ?: return
         val callerName = data["callerName"] ?: "Unknown"
         val callerAvatar = data["callerAvatar"]
         val livekitToken = data["livekitToken"]
+        val callerToken = data["callerToken"]
 
         Log.d("MyFCM", "Incoming call from $callerName, room: $roomName")
 
@@ -50,6 +68,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             putExtra("ROOM_NAME", roomName)
             putExtra("CALLER_AVATAR", callerAvatar)
             putExtra("LIVEKIT_TOKEN", livekitToken)
+            putExtra("CALLER_TOKEN", callerToken)
         }
 
         val pendingIntent = PendingIntent.getActivity(
