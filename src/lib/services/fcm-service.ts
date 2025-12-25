@@ -290,7 +290,7 @@ class FCMService {
                     callerName,
                     roomName,
                     callerAvatar,
-                    callerToken: callerFcmToken,
+                    callerFcmToken,
                     type: 'incoming_call'
                 })
             });

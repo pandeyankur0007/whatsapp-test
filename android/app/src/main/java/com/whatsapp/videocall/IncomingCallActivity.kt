@@ -12,11 +12,6 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import com.bumptech.glide.Glide
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.IntentFilter
-import android.util.Log
-import androidx.core.content.ContextCompat
 
 class IncomingCallActivity : AppCompatActivity() {
 
@@ -24,25 +19,11 @@ class IncomingCallActivity : AppCompatActivity() {
     private lateinit var roomName: String
     private var callerAvatar: String? = null
     private var livekitToken: String? = null
-    private var callerToken: String? = null
     
     // Ringtone
     private var ringtone: Ringtone? = null
     private val handler = Handler(Looper.getMainLooper())
-
     private val stopRingingRunnable = Runnable { stopRinging() }
-
-    private val callEndedReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.whatsapp.videocall.ACTION_CALL_ENDED") {
-                val endRoomName = intent.getStringExtra("ROOM_NAME")
-                if (endRoomName == roomName) {
-                    stopRinging()
-                    finish()
-                }
-            }
-        }
-    }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -83,17 +64,11 @@ class IncomingCallActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_incoming_call)
 
-        // Register Receiver
-        // Register Receiver
-        val filter = IntentFilter("com.whatsapp.videocall.ACTION_CALL_ENDED")
-        ContextCompat.registerReceiver(this, callEndedReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-
         // Get call data from intent
         callerName = intent.getStringExtra("CALLER_NAME") ?: "Unknown Caller"
         roomName = intent.getStringExtra("ROOM_NAME") ?: ""
         callerAvatar = intent.getStringExtra("CALLER_AVATAR")
         livekitToken = intent.getStringExtra("LIVEKIT_TOKEN")
-        callerToken = intent.getStringExtra("CALLER_TOKEN")
 
         // Cancel the notification that launched this activity
         val notificationManager = getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -148,13 +123,7 @@ class IncomingCallActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopRinging()
-        stopRinging()
         handler.removeCallbacks(stopRingingRunnable)
-        try {
-            unregisterReceiver(callEndedReceiver)
-        } catch (e: Exception) {
-            // Receiver might not be registered or already unregistered
-        }
     }
 
     private fun setupUI() {
@@ -209,45 +178,9 @@ class IncomingCallActivity : AppCompatActivity() {
         finish()
     }
 
-
-        
     private fun rejectCall() {
         stopRinging()
-        
-        // Notify server
-        val urlString = "http://192.168.1.3:3000/call/action" // Use IP from server log
-        
-        Thread {
-            try {
-                if (callerToken.isNullOrEmpty()) {
-                    Log.d("IncomingCall", "No callerToken available, cannot send rejection")
-                    return@Thread
-                }
-
-                Log.d("IncomingCall", "Sending rejection to caller with token: ${callerToken?.take(10)}...")
-                
-                val json = org.json.JSONObject()
-                json.put("action", "reject")
-                json.put("roomName", roomName)
-                json.put("recipientToken", callerToken) // Send rejection TO caller
-                
-                val url = java.net.URL(urlString)
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                conn.doOutput = true
-                
-                val os = conn.outputStream
-                os.write(json.toString().toByteArray(java.nio.charset.StandardCharsets.UTF_8))
-                os.close()
-
-                Log.d("IncomingCall", "Reject signal sent: " + conn.responseCode)
-                conn.disconnect()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
-        
+        // TODO: Send rejection signal via FCM
         finish()
     }
 

@@ -93,7 +93,7 @@ app.post('/call/notify', async (req, res) => {
             });
         }
 
-        const { recipientToken, callerName, roomName, callerAvatar, type, callerToken } = req.body;
+        const { recipientToken, callerName, roomName, callerAvatar, type } = req.body;
 
         if (!recipientToken || !callerName || !roomName) {
             return res.status(400).json({
@@ -103,17 +103,18 @@ app.post('/call/notify', async (req, res) => {
 
         const message = {
             token: recipientToken,
-            data: {
+            // notification: { ... }  <-- REMOVED: Triggers system tray notification automatically, bypassing onMessageReceived
+            data: { // Use data payload for custom information
                 type: type || 'incoming_call',
                 callerName,
                 roomName,
                 callerAvatar: callerAvatar || '',
                 callId: `call_${Date.now()}`,
-                livekitToken: await generateCalleeToken(callerName, roomName),
-                callerToken: callerToken || '' // Pass caller's token for callbacks (reject/accept signals)
+                livekitToken: await generateCalleeToken(callerName, roomName) // Generate token for callee (using callerName as identity for now, or random)
             },
             android: {
                 priority: 'high',
+                // notification: { ... } <-- REMOVED
             }
         };
 
@@ -124,55 +125,6 @@ app.post('/call/notify', async (req, res) => {
     } catch (error) {
         console.error('Error sending FCM notification:', error);
         res.status(500).json({ error: 'Failed to send notification' });
-    }
-});
-
-/**
- * Handle call actions (reject, cancel, end)
- * POST /call/action
- * Body: { action, roomName, recipientToken }
- * Actions: 'reject', 'cancel'
- */
-app.post('/call/action', async (req, res) => {
-    try {
-        if (!firebaseInitialized) {
-            return res.status(503).json({ error: 'FCM not configured' });
-        }
-
-        const { action, roomName, recipientToken } = req.body;
-
-        if (!action || !roomName || !recipientToken) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
-
-        let type = '';
-        if (action === 'reject' || action === 'cancel' || action === 'end') {
-            type = 'call_ended';
-        } else {
-            return res.status(400).json({ error: 'Invalid action' });
-        }
-
-        const message = {
-            token: recipientToken,
-            data: {
-                type: type,
-                roomName,
-                action: action,
-                // Add timestamp so unique hashes are generated if multiple cancels happen
-                timestamp: Date.now().toString()
-            },
-            android: {
-                priority: 'high',
-            }
-        };
-
-        const response = await admin.messaging().send(message);
-        console.log(`FCM action ${action} sent:`, response);
-        res.json({ success: true, messageId: response });
-
-    } catch (error) {
-        console.error('Error handling call action:', error);
-        res.status(500).json({ error: 'Failed to process action' });
     }
 });
 

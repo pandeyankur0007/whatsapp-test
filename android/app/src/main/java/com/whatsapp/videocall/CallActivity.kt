@@ -21,10 +21,6 @@ import io.livekit.android.room.participant.RemoteParticipant
 import io.livekit.android.room.track.Track
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.launch
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 
 import android.widget.ImageView
 import android.widget.TextView
@@ -55,10 +51,6 @@ class CallActivity : AppCompatActivity() {
     // Store URL and token for permission callback
     private var pendingUrl: String? = null
     private var pendingToken: String? = null
-    
-    // Store recipient token if we are the caller
-    private var recipientToken: String? = null
-    private var roomName: String? = null
 
     // Indicator Views
     private lateinit var remoteName: TextView
@@ -69,14 +61,6 @@ class CallActivity : AppCompatActivity() {
     
     private lateinit var localMutedIndicator: ImageView
     private lateinit var localPlaceholder: View
-
-    private val callEndedReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-             if (intent?.action == "com.whatsapp.videocall.ACTION_CALL_ENDED") {
-                 disconnectAndFinish()
-             }
-        }
-    }
 
     // Permission launcher - must be registered before onCreate completes
     private val permissionLauncher = registerForActivityResult(
@@ -151,11 +135,8 @@ class CallActivity : AppCompatActivity() {
         }
 
         // Get Intent Data
-        // Get Intent Data
         val url = intent.getStringExtra("URL") ?: ""
         val token = intent.getStringExtra("TOKEN") ?: ""
-        recipientToken = intent.getStringExtra("RECIPIENT_TOKEN")
-        roomName = intent.getStringExtra("ROOM_NAME")
 
         if (url.isEmpty() || token.isEmpty()) {
             Toast.makeText(this, "Check your connection", Toast.LENGTH_SHORT).show()
@@ -194,10 +175,6 @@ class CallActivity : AppCompatActivity() {
              Toast.makeText(this, "Check your connection", Toast.LENGTH_SHORT).show()
              finish()
         }
-        
-        // Register Receiver
-        val filter = IntentFilter("com.whatsapp.videocall.ACTION_CALL_ENDED")
-        ContextCompat.registerReceiver(this, callEndedReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     private suspend fun fetchToken(roomName: String, participantName: String): String? {
@@ -317,11 +294,7 @@ class CallActivity : AppCompatActivity() {
                             }
                             is RoomEvent.Reconnecting -> progressBar.visibility = View.VISIBLE
                             is RoomEvent.Reconnected -> progressBar.visibility = View.GONE
-                            is RoomEvent.Disconnected -> finishAndGoHome()
-                            is RoomEvent.ParticipantDisconnected -> {
-                                Toast.makeText(this@CallActivity, "Call ended", Toast.LENGTH_SHORT).show()
-                                disconnectAndFinish()
-                            }
+                            is RoomEvent.Disconnected -> finish()
                             else -> {}
                         }
                     }
@@ -338,7 +311,7 @@ class CallActivity : AppCompatActivity() {
                         room.localParticipant.setCameraEnabled(true)
                     } catch (e: SecurityException) {
                         Toast.makeText(this@CallActivity, "Permission error: ${e.message}", Toast.LENGTH_SHORT).show()
-                        finishAndGoHome()
+                        finish()
                         return@launch
                     }
                 }
@@ -364,7 +337,7 @@ class CallActivity : AppCompatActivity() {
                 
             } catch (e: Exception) {
                 Toast.makeText(this@CallActivity, "Failed to connect: ${e.message}", Toast.LENGTH_LONG).show()
-                finishAndGoHome()
+                finish()
             }
         }
     }
@@ -459,65 +432,10 @@ class CallActivity : AppCompatActivity() {
     }
 
     private fun disconnectAndFinish() {
-        // If we have a recipientToken and we are ending the call, we should notify them.
-        // This handles the "Dialer cancels call" scenario.
-        if (!recipientToken.isNullOrEmpty() && !roomName.isNullOrEmpty()) {
-             android.util.Log.d("CallActivity", "Sending cancellation to recipient with token: ${recipientToken?.take(10)}...")
-             // Notify server to cancel/end call for the other user
-             notifyServerCallEnded()
-        } else {
-             android.util.Log.d("CallActivity", "No recipientToken or roomName, skipping server notification")
-        }
-        
         lifecycleScope.launch {
-            try {
-                room.disconnect()
-            } catch (e: Exception) {
-                // ignore
-            }
-            finishAndGoHome()
+            room.disconnect()
+            finish()
         }
-    }
-    
-    private fun notifyServerCallEnded() {
-        val urlString = "http://192.168.1.3:3000/call/action"
-        val rToken = recipientToken ?: return
-        val rName = roomName ?: return
-
-        Thread {
-            try {
-                val json = JSONObject()
-                json.put("action", "cancel")
-                json.put("roomName", rName)
-                json.put("recipientToken", rToken) // Notify the RECEIVER that call is cancelled
-                
-                val url = URL(urlString)
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                conn.doOutput = true
-                
-                val os = conn.outputStream
-                os.write(json.toString().toByteArray(java.nio.charset.StandardCharsets.UTF_8))
-                os.close()
-                
-                android.util.Log.d("CallActivity", "Cancel signal sent: " + conn.responseCode)
-                conn.disconnect()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }.start()
-    }
-    
-    private fun finishAndGoHome() {
-        // Ensure we go back to MainActivity (Contact List)
-        val intent = Intent(this, MainActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        // If MainActivity was not running, REORDER_TO_FRONT brings it up or starts it.
-        // If you want to force reset to a specific screen, you might need to pass data to handle navigation in MainActivity.
-        // For now, bringing MainActivity to front is usually enough.
-        startActivity(intent)
-        finish()
     }
 
     override fun onUserLeaveHint() {
@@ -584,11 +502,6 @@ class CallActivity : AppCompatActivity() {
         lifecycleScope.launch {
             room.disconnect()
             room.release()
-        }
-        try {
-            unregisterReceiver(callEndedReceiver)
-        } catch (e: Exception) {
-            // Ignore
         }
     }
 }
